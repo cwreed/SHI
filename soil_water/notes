@@ -1,0 +1,9 @@
+NOTES:
+
+11/14/19.
+
+Worked on revisiting analysis. Going to use 'Paper' as a random factor in models. Even though I can standardize IR and SOC data to some degree, slight differences in the methods make it hard to get them completely consistent for a meta-regression approach. I think it's still worth it, though, to standardize depths for the SOC data to some degree if needed. Seems the deepest any samples were taken was 30 cm, but don't want to compare papers where the deepest was 5 or 10 cm to papers where samples were taken to 30. 
+
+Only big remaining question is if I'm accounting for controls correctly. Right now, I'm parsing controls based on y/n for a particular conservation ag treatment (i.e. tillage or cover). If an observation is n for tillage, say, then it is a control for tillage data. Problem with this is it could be a y for some other conservation ag approach. Maybe I should identify controls as observations with no conservation ag treatments?
+
+Also, need to check if I was counting residue retention as organic amendment in treatment classifications. In retrospect that does not make sense if I was. 
