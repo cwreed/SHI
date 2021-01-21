@@ -58,8 +58,8 @@ d.yield.nonagg %>%
 # Run for all filtered data sets and treatments
 # Results recorded at: https://docs.google.com/spreadsheets/d/1-4Mq3p9yPTGBo2L5b5kDuBktsKRHxabzDJqj80yXzVs/edit#gid=1372771532
 
-new <- lme(Yield.weighted ~ Weed.mgmt, random = ~1|AEZ/Paper/Crop,
-                 data = d.yield.filtered5, na.action = "na.omit")
+new <- lme(Yield.weighted ~ Fertilizer, random = ~1|Paper/Crop,
+                 data = d.yield.filtered3, na.action = "na.omit")
 new.tidy <- broom.mixed::tidy(new)
 
 new.tidy %>%

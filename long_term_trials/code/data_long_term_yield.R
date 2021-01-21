@@ -1,13 +1,5 @@
 source("code/libraries.R")
 
-gs_ls()
-
-d.raw <- gs_title("Long_term_yield _data")
-gs_ws_ls(d.raw)
-d.raw <- gs_read(ss=d.raw, ws = "Yield")
-
-
-
 d.raw <- read.xlsx('data/Long_term_yield _data.xlsx', sheet = 'Yield')
 
 d <- d.raw[,-18]
@@ -42,6 +34,8 @@ d$Year_of_observation <- as.numeric(d$Year_of_observation)
 d <- d[-which(d$Units %in% "g kg-1"),]
 d <- droplevels(d)
 levels(d$Units)
+
+d$Yield <- as.numeric(as.character(d$Yield))
 
 # Make new column with yield in kg per hectare for all obsvervations
 # Giese et al. 2014 grape paper, vines planted at 1993 vines/ha per methods section, multiply by 1993 to change to kg ha-1

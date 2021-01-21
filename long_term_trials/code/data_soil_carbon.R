@@ -1,17 +1,5 @@
 source("code/libraries.R")
-gs_ls()
-d.raw <- gs_title("Long_term_yield _data")
-gs_ws_ls(d.raw)
-d.carbon.raw <- gs_read(ss=d.raw, ws = "Carbon", col_types = "ccccdcccccccccccccd?")
 
-# Old way
-d.carbon <- d.carbon.raw[,-20]
-names(d.carbon)[1:5] <- c("Paper",
-                   "DOI",
-                   "Study_name",
-                   "Years_of_study",
-                   "Year_of_observation")
-# New way
 d.carbon.raw <- read.xlsx('data/Long_term_yield _data.xlsx', sheet = 'Carbon')
 
 d.carbon <- d.carbon.raw[,-20]
@@ -59,7 +47,8 @@ d.carbon <- d.carbon[!is.na(d.carbon$Trt.code),]
 ## Summarize within papers
 d.carbon <- droplevels(d.carbon[-which(d.carbon$`Soil.sample.depth.(cm)` %in% c(">115",">120")),])
 d.carbon$`Soil.sample.depth.(cm)` <- as.character(d.carbon$`Soil.sample.depth.(cm)`)
-d.carbon$Year_of_observation <- as.numeric(d.carbon$Year_of_observation)
+d.carbon$Year_of_observation <- as.numeric(as.character(d.carbon$Year_of_observation))
+d.carbon$Bulk.density <- as.numeric(as.character(d.carbon$Bulk.density))
 
 d.carbon %>%
   dplyr::group_by(Paper) %>%
@@ -68,12 +57,19 @@ d.carbon %>%
   mutate(Depth.increment=as.numeric(Bottom.depth) - as.numeric(Top.depth)) %>%
   mutate(max.bottom = max(as.numeric(Bottom.depth))) %>%
   mutate(Depth.proportion =as.numeric(Depth.increment)/max.bottom) %>%
-  mutate(Soil.kg.per.hectare = as.numeric(100000*Depth.increment)) -> d.carbon
+  mutate(Soil.kg.per.hectare = case_when(
+    !is.na(Bulk.density) ~ case_when(
+      Bulk.density.units == 'g cm-3' ~ as.numeric(100000 * Bulk.density * Depth.increment),
+      Bulk.density.units == 'kg m-3' ~ as.numeric(10000 * Bulk.density * Depth.increment),
+      Bulk.density.units == 'Mg m-3' ~ as.numeric(1e+7 * Bulk.density * Depth.increment),
+      Bulk.density.units == 't m-3' ~ as.numeric(1e+7 * Bulk.density * Depth.increment)
+    ),
+    is.na(Bulk.density) ~ as.numeric(100000*Depth.increment))) -> d.carbon
 
 d.carbon$Depth.proportion
 d.carbon[is.na(d.carbon$Depth.proportion), "Depth.proportion"] <- 1
 
-d.carbon <- d.carbon[as.numeric(d.carbon$Bottom.depth) < 50,]
+d.carbon <- d.carbon[as.numeric(as.character(d.carbon$Bottom.depth)) < 50,]
 
 ## Filter out unusual C measurements, convert all SOC data to same units, assume BD of one
 
@@ -100,17 +96,17 @@ unique(d.carbon$C.Units)
 d.carbon <- droplevels(d.carbon[!d.carbon$C.Units %in% "g kg-1 aggregates",])
 d.carbon <- d.carbon[!d.carbon$C.Units %in% "kg C m-2\n(on 450 kg m-2 soil)",]
 
-d.carbon$Amount <- as.numeric(d.carbon$Amount)
+d.carbon$Amount <- as.numeric(as.character(d.carbon$Amount))
 
 d.carbon %>%
   mutate(SOC.g.kg = case_when(
     C.Units == "%" ~ Amount/.1,
     #C.Units == "kg C m-2\n(on 450 kg m-2 soil)" ~ Amount*1000/Soil.kg.per.hectare*1000,
-    C.Units == "kg m-2" ~ Amount*1000/Soil.kg.per.hectare*1000,
+    C.Units == "kg m-2" ~ Amount*10000*1000/Soil.kg.per.hectare,
     C.Units == "g kg-1" ~ Amount,
-    C.Units == "Mg ha-1" ~ Amount/Soil.kg.per.hectare*1000000,
-    C.Units == "T ha-1" ~ Amount/Soil.kg.per.hectare*1000000,
-    C.Units == "t ha-1" ~ Amount/Soil.kg.per.hectare*1000000
+    C.Units == "Mg ha-1" ~ (Amount*1000000/Soil.kg.per.hectare),
+    C.Units == "T ha-1" ~ (Amount*1000000/Soil.kg.per.hectare),
+    C.Units == "t ha-1" ~ (Amount*1000000/Soil.kg.per.hectare)
   )) -> d.carbon
 
 d.carbon[d.carbon$SOM.or.SOC %in% c("SOM","SOM (total)"),"SOC.g.kg"] <- d.carbon[d.carbon$SOM.or.SOC %in% c("SOM","SOM (total)"),"SOC.g.kg"]*.58
@@ -149,7 +145,11 @@ d.carbon.new %>%
   mutate(Depth.increment = as.numeric(`bottom.measurement.depth.(cm)`) - as.numeric(`top.measurement.depth.(cm)`)) %>%
   do(mutate(., max.bottom = as.numeric(max(as.numeric(`bottom.measurement.depth.(cm)`))))) %>%
   mutate(Depth.proportion = as.numeric(Depth.increment)/max.bottom) %>%
-  mutate(Soil.kg.per.hectare = as.numeric(100000*Depth.increment)) -> d.carbon.new
+  mutate(Soil.kg.per.hectare = case_when(
+    !is.na(soil.bulk.density.units) ~ case_when(
+      soil.bulk.density.units == 'g/cm^3' ~ as.numeric(1e+8/1000 * soil.bulk.density.value * Depth.increment),
+      soil.bulk.density.units == 'Mg/m^3' ~ as.numeric(1e+7 * soil.bulk.density.value * Depth.increment)),
+    is.na(soil.bulk.density.units) ~ as.numeric(100000*Depth.increment))) -> d.carbon.new
 
 d.carbon.new[is.na(d.carbon.new$Depth.proportion), 'Depth.proportion'] <- 1
 
@@ -160,9 +160,8 @@ d.carbon.new <- d.carbon.new %>%
 d.carbon.new %>%
   mutate(SOC.g.kg = case_when(
     soil.carbon.units == '%' ~ soil.carbon.value/.1,
-    soil.carbon.units == 'Mg/ha' ~ soil.carbon.value/Soil.kg.per.hectare*1000000,
-    soil.carbon.units == 'g C/g soil' ~ soil.carbon.value*1000
-  )) -> d.carbon.new
+    soil.carbon.units == 'Mg/ha' ~ (soil.carbon.value*1000000/Soil.kg.per.hectare),
+    soil.carbon.units == 'g C/g soil' ~ soil.carbon.value*1000)) -> d.carbon.new
 
 d.carbon.new %>%
   group_by(Paper, Trt.combo, `top.measurement.depth.(cm)`) %>%
