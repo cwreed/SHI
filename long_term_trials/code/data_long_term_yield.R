@@ -6,19 +6,25 @@ d.raw <- gs_title("Long_term_yield _data")
 gs_ws_ls(d.raw)
 d.raw <- gs_read(ss=d.raw, ws = "Yield")
 
-d <- d.raw[,-17]
-names(d)[1:5] <- c("Paper",
+
+
+d.raw <- read.xlsx('data/Long_term_yield _data.xlsx', sheet = 'Yield')
+
+d <- d.raw[,-18]
+names(d)[c(1:5, 17)] <- c("Paper",
                    "DOI",
                    "Study_name",
                    "Years_of_study",
-                   "Year_of_observation")
+                   "Year_of_observation",
+                   "Corresponding soil paper")
+
 
 ## Clean it all up
 
 d %>% 
   fill(names(.)[c(1:3)]) %>% 
   group_by(DOI) %>%
-  fill(names(.)[c(4,6:16)]) %>%
+  fill(names(.)[c(4,6:14,17)]) %>%
   separate(col = "Years_of_study", into = c("Year_started","Year_ended"), sep = "-") %>%
   ungroup() %>%
   separate(Year_of_observation,c("begin_obs","end_obs"),remove = F) %>%
@@ -28,8 +34,11 @@ d %>%
   mutate(obs_length = as.numeric(end_obs) - as.numeric(begin_obs)) %>%
   mutate_if(grepl(names(.),pattern = "Yield|begin|end|start|length"), as.numeric) -> d
 
+d[d == 'Placeholder'] <- NA
+
 d <- d[d$obs_length <= 1,]
 d <- d[!is.na(d$Yield),]
+d$Year_of_observation <- as.numeric(d$Year_of_observation)
 d <- d[-which(d$Units %in% "g kg-1"),]
 d <- droplevels(d)
 levels(d$Units)
@@ -40,11 +49,12 @@ levels(d$Units)
 d <- d %>%
   mutate(
     Yield.kg.per.hectare = case_when(
-      Units == "kg DM ha-1"| Units == "kg ha-1" | Units == "kg hm-2" ~ Yield,
+      Units == "kg DM ha-1"| Units == "kg ha-1" | Units == "kg hm-2"  | Units == " kg ha-1" ~ Yield,
       Units == "g m-2" ~ Yield*10,
       Units == "kg vine-1" ~ Yield*1993,
       Units == "Mg (biomass) ha-1"| Units == "Mg ha-1" |
-        Units == "t DM ha-1"| Units == "t ha-1" | Units == "ton hm-2" ~ Yield * 1000))
+        Units == "t DM ha-1"| Units == "t ha-1" | Units == "ton hm-2" ~ Yield * 1000,
+      Units == 'dt ha-1' ~ Yield * 100))
 
 paste.drop.NA <- function(x, sep = ", ") {
   x <- gsub("^\\s+|\\s+$", "", x)  #what is this string?
@@ -62,20 +72,22 @@ unique(d$Crop)
 d <- d %>%
   mutate(Crop = str_replace_all(Crop, pattern = 
                    c("Potato \\(marketable\\)|Potato tuber" = "Potato",
-                   "Maize \\(mean yield\\)|Maize \\(grain\\)|Continuous Maize|Rotated Maize|Sole maize|Sole maize \\(no trees\\)" = "Maize",
+                   "Maize\\s|Maize \\(mean yield\\)|Maize\\(mean yield\\)|Maize \\(grain\\)|Maize\\(grain\\)|Maize\\(dry matter\\)|Continuous Maize|Rotated Maize|Sole maize|Sole maize \\(no trees\\)|Sweet Maize" = "Maize",
                    "Vetch cover crop \\(aerial biomass\\)|Vetch \\(aerial\\)" = "Vetch",
                    "Barley cover crop \\(aerial biomass\\)" = "Barley \\(aerial\\)",
                    "Spring barley \\(grain\\)" = "Spring barley",
-                   "Rotated soybean|Soybean grain" = "Soybean",
-                   "Accumulated maize stover|Maize \\(dry matter\\)|Maize stalks and leaves \\(mean dry matter, 108 days after planting\\)|Maize stover" = "Maize \\(stover\\)",
-                   "Maize \\(total plant biomass\\)" = "Maize biomass",
-                   "Wheat grain" = "Wheat",
+                   "Rotated soybean|Soybean grain|Soy" = "Soybean",
+                   "Accumulated maize stover|Maize \\(dry matter\\)|Maizestalks and leaves \\(mean dry matter, 108 days after planting\\)|Maize stover|Maizestover|Maize\\(stover\\)" = "Maize \\(stover\\)",
+                   "Maize\\(total plant biomass\\)|Maizebiomass" = "Maize biomass",
+                   "Maize\\(silage\\)|Maizesilage|Maizesilage dry matter" = "Maize (silage)",
+                   "Wheat grain|Wheat \\(Jimai 22\\)|T(\\.?) aestivum(/s?)(\\(.*\\))?|T\\. aestivum" = "Wheat",
                    "Oats+" = "Oat",
                    "Maize silage dry matter|Maize silage" = "Maize \\(silage\\)",
                    "Barley residue|Barley straw" = "Barley \\(residue\\)",
                    "Wheat straw|Wheat residue" = "Wheat \\(residue\\)",
                    "Faba bean \\(grain\\)" = "Faba bean",
                    "Rape|Oil seed rape|Spring oil seed rape" = "Oilseed rape",
+                   "Upland rice" = "Rice",
                    " \\(no trees\\)" = "")))
 
 crop.review <- d %>%
@@ -111,6 +123,7 @@ d.yield.new %>%
   rename("begin_obs" = "begin.obs",
          "end_obs" = "end.obs",
          "obs_length" = "obs.length",
+         "Year_of_observation" = "obs.year",
          "Treatment_1" = "treatment.1",
          "Treatment_2" = "treatment.2",
          "Treatment_3" = "treatment.3",
@@ -121,15 +134,19 @@ d.yield.new %>%
          "Yield" = "yield",
          "Units" = "yield.units") -> d.yield.new
 
-d.yield.new$obs.year <- as.numeric(d.yield.new$obs.year)
+d.yield.new$Year_of_observation <- as.numeric(d.yield.new$Year_of_observation)
 d.yield.new$begin_obs <- as.numeric(d.yield.new$begin_obs)
 d.yield.new$end_obs <- as.numeric(d.yield.new$end_obs)
+d.yield.new$Trt.combo <- apply(d.yield.new[,8:14], 1, paste.drop.NA)
 
 d %>%
   bind_rows(d.yield.new) -> d
 
 d.trts <- read.xlsx("data/d.trts.all.papers.xlsx")
 str(d.trts)
+
+test_yield <- x %>%
+  anti_join(d.trts[,c(1,11,12,21)])
 
 d %>%
   left_join(d.trts[,c(1,11,12,21)]) %>%
